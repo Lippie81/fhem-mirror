@@ -1,5 +1,5 @@
 
-# $Id$
+# $Id: 31_HUEDevice.pm 19961 2019-08-07 13:30:18Z justme1968 $
 
 # "Hue Personal Wireless Lighting" is a trademark owned by Koninklijke Philips Electronics N.V.,
 # see www.meethue.com for more information.
@@ -448,6 +448,19 @@ HUEDevice_SetParam($$@)
       $cmd = "off";
       $value = $value2;
     }
+
+  if($cmd eq "pct" && $value == 0 ) {
+    $cmd = "off";
+    $value = $value2;
+  }
+  if($cmd eq "bridgeupdatestate" ) {
+    if($value eq "on" && !defined($value2)){
+		$value = 100;
+	}elsif($value eq "off"){
+		$value = 0;
+	}elsif($value eq "on" && defined($value2)){
+		$value = $value2;
+	}
   }
 
   if($cmd eq 'on') {
@@ -461,6 +474,23 @@ HUEDevice_SetParam($$@)
     $obj->{'on'}  = JSON::false;
     $obj->{'transitiontime'} = $value * 10 if( defined($value) );
 
+  } elsif($cmd eq 'bridgeupdatestate') {
+    if ( $value == 0 ) {
+		$obj->{'on'}  = JSON::false;
+		$obj->{'bri'}  = int(0);	
+	}else{
+		my $bri;
+		if( $value > 50 ) {
+		  $bri = 2.57 * ($value-50) + 128;
+		} else {
+		  $bri = 2.59 * ($value-50) + 128;
+		}
+		$bri = 0 if( $bri < 0 );
+		$bri = 254 if( $bri > 254 );
+		$obj->{'on'}  = JSON::true;
+		$obj->{'bri'}  = int($bri);	
+	}
+    $obj->{'transitiontime'} = $value * 10 if( defined($value) );
   } elsif($cmd eq "pct") {
     if( $subtype  eq 'blind' ) {
       $obj->{'pct'}  = int($value);
@@ -876,6 +906,8 @@ HUEDevice_Set($@)
     if( $hash->{helper}->{devtype} eq 'G' ) {
       $hash->{helper}->{update} = 1;
       $result = HUEDevice_ReadFromServer($hash,"$hash->{ID}/action",\%obj);
+    } elsif ( $cmd eq "bridgeupdatestate" ) {
+      $result = HUEDevice_ReadFromServer($hash,"$hash->{ID}/bridgeupdatestate",\%obj);
     } else {
       $result = HUEDevice_ReadFromServer($hash,"$hash->{ID}/state",\%obj);
     }
@@ -904,7 +936,7 @@ HUEDevice_Set($@)
 
   my $subtype = AttrVal($name, "subType", "extcolordimmer");
 
-  my $list = "off:noArg on:noArg toggle:noArg statusRequest:noArg";
+  my $list = "off:noArg on:noArg toggle:noArg statusRequest:noArg bridgeupdatestate";
   $list .= " pct:colorpicker,BRI,0,1,100 bri:colorpicker,BRI,0,1,254" if( $subtype =~ m/dimmer/ );
   $list .= " rgb:colorpicker,RGB" if( $subtype =~ m/color/ );
   $list .= " color:colorpicker,CT,2000,1,6500 ct:colorpicker,CT,154,1,500" if( $subtype =~ m/ct|ext/ );
@@ -935,32 +967,32 @@ HUEDevice_Set($@)
     }
   }
 
-  if( my $scenes = $hash->{IODev}{helper}{scenes} ) {
-    local *containsOneOfMyLights = sub($) {
-      return 1 if( !defined($hash->{helper}{lights}) );
+	if( my $scenes = $hash->{IODev}{helper}{scenes} ) {
+		local *containsOneOfMyLights = sub($) {
+			return 1 if( !defined($hash->{helper}{lights}) );
 
-      my( $lights ) = @_;
+			my( $lights ) = @_;
 
-      foreach my $light (@{$lights}) {
-        return 1 if( defined($hash->{helper}{lights}{$light}) );
-      }
-      return 0;
-    };
-    my %count;
-    map { $count{$scenes->{$_}{name}}++ } keys %{$scenes};
-    $list .= " scene:". join(",", sort grep { defined } map { if( !containsOneOfMyLights($scenes->{$_}{lights}) ) {
-                                                                undef;
-                                                              } else {
-                                                                my $scene = $scenes->{$_}{name};
-                                                                if( $count{$scene} > 1 ) {
-                                                                  $scene .= " [id=$_]";
-                                                                 }
-                                                                $scene =~ s/ /#/g; $scene;
-                                                              }
-                                                            } keys %{$scenes} );
-  } else {
-    $list .= " scene";
-  }
+			foreach my $light (@{$lights}) {
+				return 1 if( defined($hash->{helper}{lights}{$light}) );
+			}
+			return 0;
+		};
+		my %count;
+		map { $count{$scenes->{$_}{name}}++ } keys %{$scenes};
+		$list .= " scene:". join(",", sort grep { defined } map { if( !containsOneOfMyLights($scenes->{$_}{lights}) ) {
+																	undef;
+																} else {
+																	my $scene = $scenes->{$_}{name};
+																	if( $count{$scene} > 1 ) {
+																		$scene .= " [id=$_]";
+																	}
+																	$scene =~ s/ /#/g; $scene;
+																}
+															} keys %{$scenes} );
+	} else {
+		$list .= " scene";
+	}
 
   return SetExtensions($hash, $list, $name, @aa);
 }
