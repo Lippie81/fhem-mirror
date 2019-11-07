@@ -1,5 +1,5 @@
 
-# $Id$
+# $Id:$
 
 # "Hue Personal Wireless Lighting" is a trademark owned by Koninklijke Philips Electronics N.V.,
 # see www.meethue.com for more information.
@@ -1832,6 +1832,17 @@ HUEBridge_dispatch($$$;$)
         }
       }
 
+    } elsif( $type =~ m/^lights\/(\d*)\/bridgeupdatestate$/ ) {
+      if( $queryAfterSet ) {
+        my $chash = $param->{chash};
+        if( $chash->{helper}->{update_timeout} ) {
+          RemoveInternalTimer($chash);
+          InternalTimer(gettimeofday()+1, "HUEDevice_GetUpdate", $chash, 0);
+        } else {
+          RemoveInternalTimer($chash);
+          HUEDevice_GetUpdate( $chash );
+        }
+      }
     } elsif( $type =~ m/^groups\/(\d*)\/action$/ ) {
       my $chash = $param->{chash};
       if( $chash->{helper}->{update_timeout} ) {
